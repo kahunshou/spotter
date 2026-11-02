@@ -273,12 +273,20 @@ export async function openVideoScreen(file, { detector, getOptions, mask, onClos
 
     const bar = el('progress', { max: 1, value: 0 });
     const ptext = el('p', { class: 'progress-text' }, '準備中…');
-    const cancelBtn = el('button', { type: 'button', class: 'wide' }, '中止');
-    const progressBox = el('div', { class: 'video-progress' }, bar, ptext, cancelBtn);
+    const finishBtn = el('button', { type: 'button', class: 'primary' }, 'ここまでで終える');
+    const cancelBtn = el('button', { type: 'button' }, '中止');
+    const progressBox = el('div', { class: 'video-progress' }, bar, ptext,
+      el('div', { class: 'progress-buttons' }, cancelBtn, finishBtn));
     body.append(progressBox);
-    job = { cancelled: false };
+    job = { cancelled: false, finishEarly: false };
     const myJob = job;
     cancelBtn.addEventListener('click', () => { myJob.cancelled = true; });
+    finishBtn.addEventListener('click', () => {
+      myJob.finishEarly = true;
+      finishBtn.disabled = true;
+      cancelBtn.disabled = true;
+      ptext.textContent = 'ここまでの分をまとめています…';
+    });
     keepAwake('video', true);
 
     try {
@@ -288,6 +296,7 @@ export async function openVideoScreen(file, { detector, getOptions, mask, onClos
         job: myJob,
         onProgress: (done, total, eta) => {
           bar.value = done / total;
+          if (myJob.finishEarly) return;
           ptext.textContent = `${done} / ${total} コマ（${Math.round(done / total * 100)}%）` +
             (eta != null ? `・残り約 ${formatTime(eta)}` : '');
         },
@@ -309,8 +318,9 @@ export async function openVideoScreen(file, { detector, getOptions, mask, onClos
     }
   });
 
-  function showResult({ blob, perClass, nFrames }, fps) {
+  function showResult({ blob, perClass, nFrames, partial }, fps) {
     preview.hidden = true;
+    if (partial) info.textContent = `${file.name}：途中（${formatTime(nFrames / fps)} まで）で終えた結果です。`;
     resultUrl = URL.createObjectURL(blob);
     const player = el('video', { src: resultUrl, controls: true, playsinline: true, class: 'video-result' });
     const rows = summarize(perClass, nFrames, fps);
@@ -362,10 +372,16 @@ export async function exportVideo({ src, W, H, vw, vh, duration, fps, interval, 
   let dets = [];
   const t0 = performance.now();
 
+  let done = nFrames;
   for (let i = 0; i < nFrames; i++) {
-    if (job.cancelled) {
+    if (job.cancelled || (job.finishEarly && i === 0)) {
       encoder.close();
       return null;
+    }
+    // 「ここまでで終える」：処理したコマだけで動画を仕上げる
+    if (job.finishEarly) {
+      done = i;
+      break;
     }
     if (encodeError) throw encodeError;
     await seek(src, Math.min(i / fps, duration - 0.001));
@@ -402,5 +418,8 @@ export async function exportVideo({ src, W, H, vw, vh, duration, fps, interval, 
   canvas.height = 0;
   muxer.finalize();
   const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-  return { blob, perClass, nFrames };
+  if (done < nFrames) {
+    for (const [cls, counts] of perClass) perClass.set(cls, counts.subarray(0, done));
+  }
+  return { blob, perClass, nFrames: done, partial: done < nFrames };
 }
