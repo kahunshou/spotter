@@ -14,7 +14,7 @@ const DEFAULTS = {
   maskOn: false,
   mask: '',
   recordClean: false,
-  backend: 'auto',       // auto / webgpu / wasm
+  backend: 'wasm',       // wasm / webgpu（iPhone の WebGPU は落ちやすいので WASM を基本にする）
   facing: 'environment',
   videoInterval: 1,
   videoFps: 30,
@@ -31,6 +31,7 @@ function load() {
   }
   const s = { ...DEFAULTS, ...saved };
   if (!Array.isArray(s.selected)) s.selected = DEFAULTS.selected.slice();
+  if (s.backend !== 'webgpu') s.backend = 'wasm';   // 以前の「自動」は WASM にする
   return s;
 }
 

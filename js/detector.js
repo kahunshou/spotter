@@ -128,10 +128,10 @@ export class Detector {
     this.prepCtx = this.prepCanvas.getContext('2d', { willReadFrequently: true });
   }
 
-  // pref: auto / webgpu / wasm
+  // pref: wasm / webgpu（webgpu が使えない端末では wasm になる）
   async init(pref) {
     let gpu = false;
-    if (pref !== 'wasm' && navigator.gpu) {
+    if (pref === 'webgpu' && navigator.gpu) {
       try {
         gpu = !!(await navigator.gpu.requestAdapter());
       } catch {
@@ -169,19 +169,23 @@ export class Detector {
     return this.sessions.get(key);
   }
 
-  // 使わないサイズのモデルを片付けてメモリを空ける
-  async release(keepSizes) {
-    for (const [key, p] of this.sessions) {
-      const size = Number(key.split('_').pop());
-      if (!keepSizes.includes(size)) {
-        this.sessions.delete(key);
-        try {
-          (await p).release();
-        } catch {
-          // 片付けの失敗は無視
+  // 使わないサイズのモデルを片付けてメモリを空ける。検出中のモデルを消さないよう、検出の順番待ちに並ぶ
+  release(keepSizes) {
+    const job = this.queue.then(async () => {
+      for (const [key, p] of this.sessions) {
+        const size = Number(key.split('_').pop());
+        if (!keepSizes.includes(size)) {
+          this.sessions.delete(key);
+          try {
+            await (await p).release();
+          } catch {
+            // 片付けの失敗は無視
+          }
         }
       }
-    }
+    });
+    this.queue = job.catch(() => {});
+    return job;
   }
 
   prepare(source, crop, size) {
@@ -201,7 +205,9 @@ export class Detector {
     ctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, dx, dy, nw, nh);
     const px = ctx.getImageData(0, 0, size, size).data;
     const area = size * size;
-    const input = new Float32Array(3 * area);
+    // 検出は1つずつ順番に行うので、入力用のメモリは毎回作らずに使い回す
+    if (!this.inputBuf || this.inputBuf.length !== 3 * area) this.inputBuf = new Float32Array(3 * area);
+    const input = this.inputBuf;
     for (let i = 0, j = 0; i < area; i++, j += 4) {
       input[i] = px[j] / 255;
       input[area + i] = px[j + 1] / 255;

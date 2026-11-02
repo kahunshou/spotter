@@ -238,6 +238,8 @@ export class LiveCamera {
     const raw = await canvasToBlob(c);
     drawDetections(ctx, dets, W, H);
     const boxed = await canvasToBlob(c);
+    c.width = 0;   // 画像用のメモリをすぐ空ける
+    c.height = 0;
     return { raw, boxed, dets };
   }
 

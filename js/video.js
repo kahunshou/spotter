@@ -27,11 +27,33 @@ function waitEvent(target, name) {
   });
 }
 
+function withTimeout(promise, ms, message) {
+  let timer = 0;
+  const limit = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
 // 同じ位置でも必ず位置合わせをする（読み込み直後は 0 秒のコマがまだ描けないことがある）
 async function seek(video, t) {
   const p = waitEvent(video, 'seeked');
   video.currentTime = t;
   await p;
+}
+
+// iPhone は指示するまで動画の中身を読み込まないので、自分で読み込みを始めて最初のコマを用意する
+async function loadVideo(video, url) {
+  const meta = waitEvent(video, 'loadedmetadata');
+  video.src = url;
+  video.load();
+  await withTimeout(meta, 15000, '動画を読み込めませんでした（対応していない形式か、ファイルが大きすぎる可能性があります）');
+  try {
+    await withTimeout(seek(video, 0.001), 5000, 'seek');
+  } catch {
+    // 位置合わせで反応がないときは、音なしで一瞬再生して最初のコマを出す
+    await video.play();
+    video.pause();
+    await withTimeout(seek(video, 0.001), 10000, '動画の最初のコマを読み込めませんでした');
+  }
 }
 
 async function pickEncoderConfig(width, height, fps) {
@@ -183,13 +205,20 @@ export async function openVideoScreen(file, { detector, getOptions, mask, onClos
     return;
   }
 
-  src.src = srcUrl;
+  if (/\.avi$/i.test(file.name)) {
+    info.textContent = 'AVI 形式の動画は iPhone では読み込めません。MP4 や MOV に変換してから読み込んでください。';
+    return;
+  }
+  // 画面に置いておく（画面の外の動画は iPhone で読み込まれないことがある）
+  src.className = 'hidden-video';
+  body.append(src);
   try {
-    await waitEvent(src, 'loadeddata');
+    await loadVideo(src, srcUrl);
   } catch (e) {
     info.textContent = e.message;
     return;
   }
+  if (!body.isConnected) return;   // 読み込み中に閉じられた
   const vw = src.videoWidth;
   const vh = src.videoHeight;
   const duration = src.duration;
@@ -369,6 +398,8 @@ export async function exportVideo({ src, W, H, vw, vh, duration, fps, interval, 
   await encoder.flush();
   if (encodeError) throw encodeError;
   encoder.close();
+  canvas.width = 0;   // 画像用のメモリをすぐ空ける
+  canvas.height = 0;
   muxer.finalize();
   const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
   return { blob, perClass, nFrames };

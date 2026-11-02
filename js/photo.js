@@ -57,18 +57,20 @@ export async function openPhotoScreen(files, { detector, getOptions, onClose }) 
     const f = files[i];
     progress.textContent = `検出中… ${i + 1} / ${files.length}`;
     try {
+      // 大きな写真はすぐ縮めて元の画像を手放す（iPhone はメモリが少ない）
       const bmp = await createImageBitmap(f);
       const s = Math.min(1, MAX_PHOTO_SIDE / Math.max(bmp.width, bmp.height));
       const W = Math.round(bmp.width * s);
       const H = Math.round(bmp.height * s);
-      const { dets } = await detector.detect(bmp, { x: 0, y: 0, w: bmp.width, h: bmp.height }, IMPORT_SIZE, opts);
       const c = el('canvas', { width: W, height: H });
       const ctx = c.getContext('2d');
       ctx.drawImage(bmp, 0, 0, W, H);
       bmp.close();
-      const scaled = dets.map((d) => ({ ...d, x1: d.x1 * s, y1: d.y1 * s, x2: d.x2 * s, y2: d.y2 * s }));
-      drawDetections(ctx, scaled, W, H);
+      const { dets } = await detector.detect(c, { x: 0, y: 0, w: W, h: H }, IMPORT_SIZE, opts);
+      drawDetections(ctx, dets, W, H);
       const blob = await canvasToBlob(c);
+      c.width = 0;   // 画像用のメモリをすぐ空ける
+      c.height = 0;
       if (closed) break;
       const file = new File([blob], `${baseName(f.name)}_box.jpg`, { type: 'image/jpeg' });
       const url = URL.createObjectURL(blob);

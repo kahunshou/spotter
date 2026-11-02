@@ -90,6 +90,8 @@ function classSection(onChange) {
     el('h3', {}, '検出するもの ', countLabel), presets, search, list);
 }
 
+let currentTab = 'classes';   // 開き直したときも前に見ていたタブを出す
+
 export function renderSettings({ onChange, detector, offlineInfo, onPrepareOffline }) {
   const body = $('#settingsBody');
   body.replaceChildren();
@@ -109,7 +111,7 @@ export function renderSettings({ onChange, detector, offlineInfo, onPrepareOffli
     onChange('liveSize');
   });
 
-  const backendSeg = segmented([['auto', '自動'], ['webgpu', 'WebGPU'], ['wasm', 'WASM']], settings.backend, (v) => {
+  const backendSeg = segmented([['wasm', 'WASM（おすすめ）'], ['webgpu', 'WebGPU']], settings.backend, (v) => {
     settings.backend = v;
     saveSettings();
     onChange('backend');
@@ -123,8 +125,8 @@ export function renderSettings({ onChange, detector, offlineInfo, onPrepareOffli
     offlineBtn.hidden = ready;
   }));
 
-  body.append(
-    classSection(onChange),
+  const classesPane = el('div', {}, classSection(onChange));
+  const otherPane = el('div', {},
     el('section', {},
       el('h3', {}, 'しきい値 ', confValue),
       el('p', { class: 'hint' }, 'この値より信頼度が低い枠は表示しません。下げると見逃しが減り、誤検出が増えます。'),
@@ -144,7 +146,7 @@ export function renderSettings({ onChange, detector, offlineInfo, onPrepareOffli
       el('p', { class: 'hint' }, 'ホーム画面に追加したアプリで一度ネットにつないで開くと保存されます（約90MB、Wi-Fi 推奨）。')),
     el('section', {},
       el('h3', {}, '計算方式（詳細）'),
-      el('p', { class: 'hint' }, `現在：${detector.backend || '—'}（スレッド ${detector.threads}）。変更はアプリを開き直すと反映されます。うまく動かないときだけ変えてください。`),
+      el('p', { class: 'hint' }, `現在：${detector.backend || '—'}（スレッド ${detector.threads}）。WASM は安定して動きます。WebGPU は端末によっては速くなりますが、iPhone では落ちやすいことがあります。変更はアプリを開き直すと反映されます。`),
       backendSeg),
     el('section', { class: 'about' },
       el('h3', {}, 'このアプリについて'),
@@ -153,4 +155,16 @@ export function renderSettings({ onChange, detector, offlineInfo, onPrepareOffli
       el('p', {}, '物体検出：Ultralytics YOLO11n（AGPL-3.0）。サル：独自学習モデル v6（学習データの一部に Open Images Dataset を使用。注釈 CC BY 4.0、画像 CC BY 2.0）。'),
       el('p', {}, '使用ライブラリ：onnxruntime-web（MIT）、mp4-muxer（MIT）。このアプリ自体も AGPL-3.0 で公開しています。')),
   );
+
+  // タブ：「検出するもの」と「その他の設定」を分けて表示する
+  const show = (tab) => {
+    currentTab = tab;
+    classesPane.hidden = tab !== 'classes';
+    otherPane.hidden = tab !== 'other';
+    body.scrollTop = 0;
+  };
+  const tabs = segmented([['classes', '検出するもの'], ['other', 'その他の設定']], currentTab, show);
+  tabs.classList.add('tabs');
+  body.append(tabs, classesPane, otherPane);
+  show(currentTab);
 }

@@ -28,6 +28,35 @@ let recTimer = 0;
 
 const maskActive = () => settings.maskOn && !mask.isEmpty();
 
+// 何をしている途中かを端末に書いておく。iPhone がメモリ不足でアプリを終わらせると消されずに残るので、
+// 次に開いたときに知らせられる。
+const ACTIVITY_KEY = 'spotter-activity';
+let activity = '';
+function setActivity(name) {
+  activity = name;
+  markStored(name);
+}
+function markStored(name) {
+  try {
+    if (name) localStorage.setItem(ACTIVITY_KEY, name);
+    else localStorage.removeItem(ACTIVITY_KEY);
+  } catch {
+    // 保存できなくても動かす
+  }
+}
+function reportLastExit() {
+  let last = null;
+  try {
+    last = localStorage.getItem(ACTIVITY_KEY);
+  } catch {
+    last = null;
+  }
+  if (last) {
+    toast(`前回は「${last}」の途中でアプリが終了しました（メモリ不足の可能性）。重いときは設定でライブ検出のサイズを 320 にしてください。`, 8000);
+    markStored('');
+  }
+}
+
 function liveOptions() {
   return { conf: settings.conf, selected, maskTest: maskActive() ? (x, y) => mask.has(x, y) : null };
 }
@@ -66,6 +95,7 @@ async function startCamera() {
     await cam.start(settings.facing);
     keepAwake('camera', true);
     updateZoomLabel();
+    setActivity('ライブ検出');
   } catch (e) {
     keepAwake('camera', false);
     const msg = e.name === 'NotAllowedError'
@@ -239,8 +269,18 @@ $('#importVideo').addEventListener('click', () => {
   $('#videoInput').click();
 });
 
+// 写真・動画の画面とライブでは使うサイズが違うので、使わないほうのモデルを片付けてから切り替える
+function openImportScreen(name) {
+  screenOpen = true;
+  stopCamera();
+  setActivity(name);
+  detector.release([IMPORT_SIZE]);
+}
+
 async function resumeCamera() {
   screenOpen = false;
+  setActivity('');
+  detector.release([settings.liveSize]);
   try {
     await startCamera();
   } catch {
@@ -252,16 +292,14 @@ $('#photoInput').addEventListener('change', (e) => {
   const files = [...e.target.files];
   e.target.value = '';
   if (!files.length) return;
-  screenOpen = true;
-  stopCamera();
+  openImportScreen('写真の読み込み');
   openPhotoScreen(files, { detector, getOptions: importOptions, onClose: resumeCamera });
 });
 $('#videoInput').addEventListener('change', (e) => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  screenOpen = true;
-  stopCamera();
+  openImportScreen('動画の読み込み');
   openVideoScreen(file, { detector, getOptions: importOptions, mask, onClose: resumeCamera });
 });
 
@@ -332,7 +370,7 @@ function onSettingChange(key) {
     selected = selectedSet();
     if (selected.has(MONKEY)) detector.session('monkey_v6', settings.liveSize).catch(() => {});
   } else if (key === 'liveSize') {
-    detector.release([settings.liveSize, IMPORT_SIZE]);
+    detector.release([settings.liveSize]);
     toast('サイズを変更しました（切り替えに数秒かかります）');
   } else if (key === 'backend') {
     toast('アプリを開き直すと反映されます');
@@ -366,6 +404,12 @@ $('#helpClose').addEventListener('click', () => {
 });
 
 // ---- アプリを切り替えたとき ----
+// 自分で閉じたり別のアプリに切り替えたりしたときは「途中で終了」の記録を消す
+document.addEventListener('visibilitychange', () => {
+  markStored(document.visibilityState === 'hidden' ? '' : activity);
+});
+window.addEventListener('pagehide', () => markStored(''));
+
 document.addEventListener('visibilitychange', async () => {
   if (!started || screenOpen) return;
   if (document.visibilityState === 'hidden') {
@@ -381,6 +425,7 @@ document.addEventListener('visibilitychange', async () => {
 
 registerServiceWorker();
 applyVisibility();
+reportLastExit();
 
 if (new URLSearchParams(location.search).has('selftest')) {
   import('../dev/selftest.js').then((m) => m.run({ detector, cam, mask, settings }));
