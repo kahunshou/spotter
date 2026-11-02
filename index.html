@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Spotter">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/style.css">
+  <title>Spotter</title>
+</head>
+<body>
+  <main id="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="view"></canvas>
+    <canvas id="overlay"></canvas>
+    <div id="flash" hidden></div>
+  </main>
+
+  <div id="topbar">
+    <div id="counts"></div>
+    <div class="top-right">
+      <span id="status"></span>
+      <button id="helpBtn" class="icon-btn" type="button" aria-label="使い方">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.3 9.4a2.8 2.8 0 1 1 3.9 2.6c-.8.4-1.2 1-1.2 1.8v.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.3"/></svg>
+      </button>
+      <button id="settingsBtn" class="icon-btn" type="button" aria-label="設定">
+        <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm7.4-2.5.1-1-.1-1 2.1-1.6-2-3.5-2.5 1a7 7 0 0 0-1.7-1L15 3h-4l-.4 2.6a7 7 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11l-.1 1 .1 1-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L11 21h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5-2.2-1.9Z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="maskButtons">
+    <button id="maskToggle" class="side-btn" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 20 20 4" stroke="currentColor" stroke-width="2"/></svg>
+      <span>非検出</span>
+    </button>
+    <button id="maskEdit" class="side-btn" type="button">
+      <svg viewBox="0 0 24 24"><path d="m4 20 1-4L16 5l3 3L8 19l-4 1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <span>範囲</span>
+    </button>
+  </div>
+
+  <div id="maskBar" hidden>
+    <button id="maskPaint" type="button" class="on">塗る</button>
+    <button id="maskErase" type="button">消す</button>
+    <button id="maskClear" type="button">全部消す</button>
+    <button id="maskDone" type="button" class="primary">完了</button>
+  </div>
+
+  <div id="recTime" hidden>0:00</div>
+  <button id="zoomLabel" type="button">1.0x</button>
+
+  <div id="bottombar">
+    <button id="importBtn" class="icon-btn big" type="button" aria-label="写真・動画を読み込む">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m4 16 5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="9" r="1.6"/></svg>
+    </button>
+    <button id="shutterBtn" type="button" aria-label="静止画を撮る"></button>
+    <button id="recordBtn" type="button" aria-label="録画"><span></span></button>
+    <button id="flipBtn" class="icon-btn big" type="button" aria-label="前後カメラの切り替え">
+      <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 13a3 3 0 0 1 5.2-2M15 13a3 3 0 0 1-5.2 2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+    </button>
+  </div>
+
+  <div id="importBackdrop" hidden></div>
+  <div id="importMenu" hidden>
+    <button id="importPhoto" type="button">写真を読み込む</button>
+    <button id="importVideo" type="button">動画を読み込む</button>
+  </div>
+  <input id="photoInput" type="file" accept="image/*" multiple hidden>
+  <input id="videoInput" type="file" accept="video/*" hidden>
+
+  <section id="start">
+    <img src="icons/icon-192.png" alt="" width="96" height="96">
+    <h1>Spotter</h1>
+    <p>YOLO11n の 80 種類＋サルを検出します。</p>
+    <button id="startBtn" type="button" class="primary wide">カメラを開始</button>
+    <p id="startMsg" class="hint">初回はモデルなどのダウンロードがあります（Wi-Fi 推奨）。</p>
+    <button id="startHelp" type="button" class="link">使い方を見る</button>
+  </section>
+
+  <section id="settings" class="screen" hidden>
+    <header class="screen-head">
+      <span></span>
+      <h2>設定</h2>
+      <button id="settingsClose" type="button" class="primary">完了</button>
+    </header>
+    <div id="settingsBody" class="screen-body"></div>
+  </section>
+
+  <section id="help" class="screen" hidden>
+    <header class="screen-head">
+      <span></span>
+      <h2>使い方</h2>
+      <button id="helpClose" type="button" class="primary">閉じる</button>
+    </header>
+    <div class="screen-body help">
+      <section>
+        <h3>はじめに</h3>
+        <p>「カメラを開始」を押すと、カメラに映った物を自動で見つけて枠で囲みます。人・車・犬など 80 種類と、サルを検出できます。</p>
+        <p>枠のラベルは「名前 信頼度」です（例：<b>person 0.87</b>）。信頼度は 0〜1 で、1 に近いほど自信があります。</p>
+      </section>
+      <section>
+        <h3>画面のボタン</h3>
+        <dl>
+          <dt>左上</dt><dd>今映っている物の数（設定で非表示にできます）</dd>
+          <dt>右上の小さな文字</dt><dd>検出のサイズ・1秒あたりの検出回数（fps）・計算方式</dd>
+          <dt>？</dt><dd>この画面</dd>
+          <dt>歯車</dt><dd>設定</dd>
+          <dt>右端「非検出」</dt><dd>非検出エリアの ON / OFF（赤いときが ON）</dd>
+          <dt>右端「範囲」</dt><dd>非検出エリアを描き直す</dd>
+          <dt>左下</dt><dd>スマホの中の写真・動画を読み込む（メニューの外を押すと閉じます）</dd>
+          <dt>白い丸</dt><dd>静止画を撮る</dd>
+          <dt>赤い丸</dt><dd>録画の開始 / 停止</dd>
+          <dt>右下</dt><dd>前後のカメラを切り替える</dd>
+          <dt>「1.0x」</dt><dd>今の倍率。押すと等倍に戻ります</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>ズーム</h3>
+        <p>2本の指で画面を広げる・縮めると拡大・縮小できます。</p>
+      </section>
+      <section>
+        <h3>非検出エリア</h3>
+        <p>木の揺れや看板など、検出してほしくない場所を指定できます。</p>
+        <ol>
+          <li>右端の「範囲」を押す</li>
+          <li>検出しない場所を指でなぞる（赤く塗られます）</li>
+          <li>まちがえたら「消す」でなぞって消す。「全部消す」でやり直し</li>
+          <li>「完了」を押すと ON になります</li>
+        </ol>
+        <p>枠の中心が赤い範囲に入っている物は表示されません。右端のボタンは設定で隠せます。</p>
+      </section>
+      <section>
+        <h3>撮影と保存</h3>
+        <ul>
+          <li>静止画：枠ありと枠なしの2枚を保存します</li>
+          <li>録画：枠ありの動画を保存します（設定で枠なしも一緒に保存できます）</li>
+          <li>撮ったあとに確認画面が出るので、「保存」を押すと共有メニューが開きます。「画像を保存」「ビデオを保存」で写真アプリに入ります</li>
+        </ul>
+      </section>
+      <section>
+        <h3>写真・動画の読み込み</h3>
+        <ul>
+          <li>写真：何枚でもまとめて選べます。枠ありの画像を作ります</li>
+          <li>動画：1コマずつ検出して、枠ありの動画を書き出します（音声なし）。いつ何が映ったかの「出現タイムライン」と「まとめ」も表示します。タイムラインを押すとその場面に移動します</li>
+          <li>「検出の間隔」を広げると速く終わります。「非検出エリアを使う」を選ぶと、カメラで描いた範囲を動画にも使います</li>
+          <li>動画の処理中は、画面を消したりほかのアプリに切り替えたりしないでください（止まります）</li>
+        </ul>
+      </section>
+      <section>
+        <h3>設定でできること</h3>
+        <ul>
+          <li>検出するもの：種類ごとに ON / OFF。検索や「人＋サル」などのまとめボタンもあります</li>
+          <li>しきい値：これより信頼度が低い枠は表示しません。下げると見逃しが減り、誤検出が増えます</li>
+          <li>ライブ検出のサイズ：320 / 416 / 640。大きいほど遠くの小さい物に強くなりますが、遅くなります</li>
+        </ul>
+      </section>
+      <section>
+        <h3>オフラインで使う</h3>
+        <ol>
+          <li>Safari でこのページを開き、共有ボタン →「ホーム画面に追加」</li>
+          <li>ホーム画面のアイコンから開き、ネットにつながった状態で一度「カメラを開始」</li>
+          <li>設定の「オフライン用データ」が「準備完了」になれば、圏外でも使えます</li>
+        </ol>
+      </section>
+      <section>
+        <h3>うまく動かないとき</h3>
+        <ul>
+          <li>カメラが映らない：iPhone の「設定」→「Safari」→「カメラ」で許可してください</li>
+          <li>動きが遅い・熱くなる：設定でライブ検出のサイズを 320 にしてください</li>
+          <li>アプリが固まる：一度閉じて開き直してください</li>
+        </ul>
+        <p class="hint">写真・動画はこの端末の中だけで処理し、どこにも送信しません。</p>
+      </section>
+    </div>
+  </section>
+
+  <section id="photoScreen" class="screen" hidden></section>
+  <section id="videoScreen" class="screen" hidden></section>
+
+  <div id="sheet" hidden>
+    <div class="sheet-panel">
+      <h2 id="sheetTitle"></h2>
+      <div id="sheetBody"></div>
+      <div class="sheet-buttons">
+        <button id="sheetClose" type="button">閉じる</button>
+        <button id="sheetSave" type="button" class="primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" hidden></div>
+
+  <script src="vendor/mp4-muxer.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
