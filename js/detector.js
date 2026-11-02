@@ -57,6 +57,12 @@ export async function fetchCached(url, onProgress) {
   return bytes;
 }
 
+// iPhone・iPad・Android か。iPad は PC と同じ名乗り方をするので、タッチ対応かどうかでも見分ける
+export function isMobile() {
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod|Android/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
 function iou(a, b) {
   const w = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1);
   const h = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
@@ -128,10 +134,12 @@ export class Detector {
     this.prepCtx = this.prepCanvas.getContext('2d', { willReadFrequently: true });
   }
 
-  // pref: wasm / webgpu（webgpu が使えない端末では wasm になる）
+  // pref: auto / wasm / webgpu（webgpu が使えない端末では wasm になる）
+  // auto は PC なら WebGPU、スマホなら WASM（iPhone の WebGPU は写真・動画の読み込みで落ちるため）
   async init(pref) {
     let gpu = false;
-    if (pref === 'webgpu' && navigator.gpu) {
+    const wantGpu = pref === 'webgpu' || (pref === 'auto' && !isMobile());
+    if (wantGpu && navigator.gpu) {
       try {
         gpu = !!(await navigator.gpu.requestAdapter());
       } catch {

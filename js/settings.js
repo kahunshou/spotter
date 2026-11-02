@@ -14,7 +14,7 @@ const DEFAULTS = {
   maskOn: false,
   mask: '',
   recordClean: false,
-  backend: 'wasm',       // wasm / webgpu（iPhone の WebGPU は落ちやすいので WASM を基本にする）
+  backend: 'auto',       // auto / wasm / webgpu（auto は PC なら WebGPU、スマホなら WASM）
   facing: 'environment',
   videoInterval: 1,
   videoFps: 30,
@@ -31,7 +31,7 @@ function load() {
   }
   const s = { ...DEFAULTS, ...saved };
   if (!Array.isArray(s.selected)) s.selected = DEFAULTS.selected.slice();
-  if (s.backend !== 'webgpu') s.backend = 'wasm';   // 以前の「自動」は WASM にする
+  if (!['auto', 'wasm', 'webgpu'].includes(s.backend)) s.backend = 'auto';
   return s;
 }
 

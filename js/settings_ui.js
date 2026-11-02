@@ -111,7 +111,7 @@ export function renderSettings({ onChange, detector, offlineInfo, onPrepareOffli
     onChange('liveSize');
   });
 
-  const backendSeg = segmented([['wasm', 'WASM（おすすめ）'], ['webgpu', 'WebGPU']], settings.backend, (v) => {
+  const backendSeg = segmented([['auto', '自動'], ['wasm', 'WASM'], ['webgpu', 'WebGPU']], settings.backend, (v) => {
     settings.backend = v;
     saveSettings();
     onChange('backend');
@@ -146,7 +146,7 @@ export function renderSettings({ onChange, detector, offlineInfo, onPrepareOffli
       el('p', { class: 'hint' }, 'ホーム画面に追加したアプリで一度ネットにつないで開くと保存されます（約90MB、Wi-Fi 推奨）。')),
     el('section', {},
       el('h3', {}, '計算方式（詳細）'),
-      el('p', { class: 'hint' }, `現在：${detector.backend || '—'}（スレッド ${detector.threads}）。WASM は安定して動きます。WebGPU は端末によっては速くなりますが、iPhone では落ちやすいことがあります。変更はアプリを開き直すと反映されます。`),
+      el('p', { class: 'hint' }, `現在：${detector.backend || '—'}（スレッド ${detector.threads}）。おすすめは「自動」で、PC では WebGPU、iPhone などのスマホでは WASM を使います。iPhone で WebGPU にすると写真・動画の読み込みで落ちます。変更はアプリを開き直すと反映されます。`),
       backendSeg),
     el('section', { class: 'about' },
       el('h3', {}, 'このアプリについて'),
