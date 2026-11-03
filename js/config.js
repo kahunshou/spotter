@@ -1,7 +1,7 @@
 // アプリ全体の決まった値。
 // APP_VERSION を上げるときは sw.js の VERSION も同じ値に上げる（iPhone 側の更新のきっかけになる）。
 
-export const APP_VERSION = '1.0.4';
+export const APP_VERSION = '1.0.5';
 
 // モデルと大きな部品を入れておく保存場所（sw.js と同じ名前）。中身を差し替えたら番号を上げる。
 export const BIG_CACHE = 'big-v1';
