@@ -4,7 +4,7 @@
 // - 保存してあるものは保存場所から返し、なければネットから取る。
 // - 返すときに COOP/COEP の見出しを付け、複数スレッドでの計算を使えるようにする（GitHub Pages では設定できないため）。
 
-const VERSION = '1.0.3';            // js/config.js の APP_VERSION と同じ値にする
+const VERSION = '1.0.4';            // js/config.js の APP_VERSION と同じ値にする
 const SHELL_CACHE = `shell-${VERSION}`;
 const BIG_CACHE = 'big-v1';         // js/config.js と同じ名前
 
@@ -24,6 +24,7 @@ const SHELL = [
   'js/photo.js',
   'js/settings.js',
   'js/settings_ui.js',
+  'js/tilt.js',
   'js/ui.js',
   'js/video.js',
   'vendor/mp4-muxer.js',

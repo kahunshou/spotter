@@ -133,6 +133,12 @@ svg { width: 24px; height: 24px; fill: currentColor; }
   background: var(--panel); padding: 10px; border-radius: 14px; border: 1px solid var(--line);
 }
 
+/* ---- 向きのロック中に横に持ったとき：ボタンの位置はそのまま、アイコンだけ回す（--ui-rot は main.js が設定） ---- */
+.icon-btn svg, .side-btn {
+  transform: rotate(var(--ui-rot, 0deg)); transition: transform .25s;
+}
+#zoomLabel { transform: translateX(-50%) rotate(var(--ui-rot, 0deg)); transition: transform .25s; }
+
 /* ---- 横向き：撮影ボタンを右端に縦に並べ、非検出エリアのボタンは左端へ ---- */
 @media (orientation: landscape) {
   :root { --side: calc(var(--safe-right) + 100px); }

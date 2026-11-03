@@ -53,6 +53,8 @@ export class LiveCamera {
     this.onOrientation = () => {};   // 映像が縦長⇔横長に変わったとき（'portrait' / 'landscape'）
     this.drawOverlayContent = () => {};
     this.orient = null;
+    this.rot = 0;
+    this.needLayout = false;
     this.render = this.render.bind(this);
     window.addEventListener('resize', () => this.layout());
   }
@@ -130,37 +132,68 @@ export class LiveCamera {
     return { x: (vw - w) / 2, y: (vh - h) / 2, w, h };
   }
 
-  // キャンバスを画面いっぱいに（縦横比を保って）置く
+  // 画面の向きのロック中に横に持ったとき：映像を回して横長の画像として扱う（0 / 90 / -90）
+  setRotation(rot) {
+    if (rot === this.rot) return;
+    this.rot = rot;
+    this.dets = [];
+    this.needLayout = true;
+  }
+
+  // 回したあとの映像の大きさ
+  uprightSize(c = this.crop()) {
+    return this.rot ? { w: c.h, h: c.w } : { w: c.w, h: c.h };
+  }
+
+  // キャンバスを画面いっぱいに（縦横比を保って）置く。
+  // 横に持っているときは、横長のキャンバスを画面上で回して表示する（持っている人から見てまっすぐ）。
   layout() {
     const W = this.view.width;
     const H = this.view.height;
     if (!W || !H) return;
     const sw = this.stage.clientWidth;
     const sh = this.stage.clientHeight;
-    const r = fitRect(W, H, sw, sh);
+    const turned = this.rot !== 0;
+    const r = turned ? fitRect(H, W, sw, sh) : fitRect(W, H, sw, sh);   // 画面上で占める範囲
+    const cw = turned ? r.h : r.w;   // 回す前のキャンバスの表示サイズ
+    const ch = turned ? r.w : r.h;
     for (const c of [this.view, this.overlay]) {
-      Object.assign(c.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+      Object.assign(c.style, {
+        left: `${r.x + (r.w - cw) / 2}px`, top: `${r.y + (r.h - ch) / 2}px`,
+        width: `${cw}px`, height: `${ch}px`,
+        transform: turned ? `rotate(${this.rot}deg)` : '',
+      });
     }
     const dpr = window.devicePixelRatio || 1;
-    this.overlay.width = Math.round(r.w * dpr);
-    this.overlay.height = Math.round(r.h * dpr);
+    this.overlay.width = Math.round(cw * dpr);
+    this.overlay.height = Math.round(ch * dpr);
     this.overlayDirty = true;
   }
 
   // 映像を置く位置（録画中に縦横が変わったときは黒帯を付けて収める）
   contentRect() {
-    const c = this.crop();
-    return fitRect(c.w, c.h, this.view.width, this.view.height);
+    const u = this.uprightSize();
+    return fitRect(u.w, u.h, this.view.width, this.view.height);
   }
 
   drawFrame(ctx, W, H) {
     const c = this.crop();
-    const r = fitRect(c.w, c.h, W, H);
+    const u = this.uprightSize(c);
+    const r = fitRect(u.w, u.h, W, H);
     if (r.w < W - 0.5 || r.h < H - 0.5) {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, W, H);
     }
-    ctx.drawImage(this.video, c.x, c.y, c.w, c.h, r.x, r.y, r.w, r.h);
+    if (this.rot) {
+      const s = r.w / u.w;
+      ctx.save();
+      ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+      ctx.rotate(-this.rot * Math.PI / 180);
+      ctx.drawImage(this.video, c.x, c.y, c.w, c.h, -c.w * s / 2, -c.h * s / 2, c.w * s, c.h * s);
+      ctx.restore();
+    } else {
+      ctx.drawImage(this.video, c.x, c.y, c.w, c.h, r.x, r.y, r.w, r.h);
+    }
     return r;
   }
 
@@ -176,16 +209,21 @@ export class LiveCamera {
     requestAnimationFrame(this.render);
     const v = this.video;
     if (v.readyState < 2 || !v.videoWidth) return;
-    // スマホを回すと映像の縦横が入れ替わる
-    const orient = v.videoWidth >= v.videoHeight ? 'landscape' : 'portrait';
+    // スマホを回すと映像（回したあと）の縦横が入れ替わる
+    const full = this.rot ? { w: v.videoHeight, h: v.videoWidth } : { w: v.videoWidth, h: v.videoHeight };
+    const orient = full.w >= full.h ? 'landscape' : 'portrait';
     if (orient !== this.orient) {
       this.orient = orient;
       this.dets = [];
       this.onOrientation(orient);
     }
-    if (!this.recording && (this.view.width !== v.videoWidth || this.view.height !== v.videoHeight)) {
-      this.view.width = this.clean.width = v.videoWidth;
-      this.view.height = this.clean.height = v.videoHeight;
+    if (!this.recording && (this.view.width !== full.w || this.view.height !== full.h)) {
+      this.view.width = this.clean.width = full.w;
+      this.view.height = this.clean.height = full.h;
+      this.needLayout = true;
+    }
+    if (this.needLayout) {
+      this.needLayout = false;
       this.layout();
     }
     const W = this.view.width;
@@ -213,10 +251,13 @@ export class LiveCamera {
       const v = this.video;
       if (v.readyState >= 2 && v.videoWidth && document.visibilityState === 'visible') {
         const c = this.crop();
+        const rot = this.rot;
+        const u = this.uprightSize(c);
         try {
-          const res = await this.detector.detect(v, c, this.getSize(), this.getOptions());
+          const res = await this.detector.detect(v, c, this.getSize(), { ...this.getOptions(), rot });
+          if (rot !== this.rot) continue;   // 検出中に持ち方が変わったら結果を捨てる
           this.dets = res.dets.map((d) => ({
-            ...d, x1: d.x1 / c.w, y1: d.y1 / c.h, x2: d.x2 / c.w, y2: d.y2 / c.h,
+            ...d, x1: d.x1 / u.w, y1: d.y1 / u.h, x2: d.x2 / u.w, y2: d.y2 / u.h,
           }));
           const now = performance.now();
           this.frameTimes.push(now);

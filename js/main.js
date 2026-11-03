@@ -9,6 +9,7 @@ import { offlineStatus, prepareOffline, registerServiceWorker } from './offline.
 import { countChips, openPhotoScreen } from './photo.js';
 import { saveSettings, selectedSet, settings } from './settings.js';
 import { renderSettings } from './settings_ui.js';
+import { Tilt } from './tilt.js';
 import { $, el, formatTime, keepAwake, showSheet, stamp, toast } from './ui.js';
 import { openVideoScreen } from './video.js';
 
@@ -106,6 +107,17 @@ function applyVisibility() {
   cam.overlayDirty = true;
 }
 
+// ---- 画面の向きのロック中に横に持ったとき ----
+// 映像を回して横長で検出・保存し、ボタンのアイコンだけを持っている人から見てまっすぐに回す。
+// 録画中は向きを変えず、終わってから合わせる。
+const tilt = new Tilt(() => applyRotation());
+function applyRotation() {
+  const rot = settings.autoRotate ? tilt.rot : 0;
+  if (cam.recording) return;
+  cam.setRotation(rot);
+  document.documentElement.style.setProperty('--ui-rot', `${rot}deg`);
+}
+
 function updateZoomLabel() {
   $('#zoomLabel').textContent = `${cam.zoom.toFixed(1)}x`;
 }
@@ -136,6 +148,8 @@ $('#startBtn').addEventListener('click', async () => {
   const btn = $('#startBtn');
   const msg = $('#startMsg');
   btn.disabled = true;
+  // 傾きセンサーの許可は、ボタンを押したこの瞬間に求める必要がある（iPhone）
+  tilt.requestPermission().then((ok) => { if (ok) tilt.start(); });
   try {
     msg.textContent = '準備中…';
     await detector.init(settings.backend);
@@ -216,6 +230,7 @@ async function finishRecording() {
   $('#recordBtn').classList.remove('on');
   $('#recTime').hidden = true;
   const r = await cam.stopRecording();
+  applyRotation();   // 録画中に持ち方が変わっていたら、ここで合わせる
   if (!r) return;
   const t = stamp();
   const ext = r.boxed.type.includes('mp4') ? 'mp4' : 'webm';
@@ -368,11 +383,24 @@ $('#maskClear').addEventListener('click', () => {
 $('#maskDone').addEventListener('click', () => setMaskEditing(false));
 
 const overlay = $('#overlay');
+// 指の位置を、回して表示しているキャンバスの中の位置に直す
+function pointInOverlay(e) {
+  const b = overlay.getBoundingClientRect();
+  const dx = e.clientX - (b.left + b.width / 2);
+  const dy = e.clientY - (b.top + b.height / 2);
+  const a = cam.rot * Math.PI / 180;
+  return {
+    x: dx * Math.cos(a) + dy * Math.sin(a) + overlay.clientWidth / 2,
+    y: -dx * Math.sin(a) + dy * Math.cos(a) + overlay.clientHeight / 2,
+  };
+}
+
 function paintAt(e) {
   const r = cam.contentRect();
   const sc = overlay.clientWidth / cam.view.width;
   const radius = Math.min(r.w, r.h) * sc * 0.06;
-  mask.paint(e.offsetX - r.x * sc, e.offsetY - r.y * sc, radius, r.w * sc, r.h * sc, !maskErase);
+  const p = pointInOverlay(e);
+  mask.paint(p.x - r.x * sc, p.y - r.y * sc, radius, r.w * sc, r.h * sc, !maskErase);
   cam.overlayDirty = true;
 }
 overlay.addEventListener('pointerdown', (e) => {
@@ -394,6 +422,8 @@ function onSettingChange(key) {
     toast('サイズを変更しました（切り替えに数秒かかります）');
   } else if (key === 'backend') {
     toast('アプリを開き直すと反映されます');
+  } else if (key === 'autoRotate') {
+    applyRotation();
   }
   applyVisibility();
 }

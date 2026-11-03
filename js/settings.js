@@ -14,6 +14,7 @@ const DEFAULTS = {
   maskOn: false,
   masks: { portrait: '', landscape: '' },   // 非検出エリア。映像が縦長か横長かで別々に持つ
   recordClean: false,
+  autoRotate: true,      // 画面の向きのロック中でも、横に持ったら横向きで撮る
   backend: 'auto',       // auto / wasm / webgpu（auto は PC なら WebGPU、スマホなら WASM）
   facing: 'environment',
   videoInterval: 1,

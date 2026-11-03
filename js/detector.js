@@ -196,10 +196,13 @@ export class Detector {
     return job;
   }
 
-  prepare(source, crop, size) {
-    const r = Math.min(size / crop.w, size / crop.h);
-    const nw = Math.round(crop.w * r);
-    const nh = Math.round(crop.h * r);
+  // rot（0 / 90 / -90）：スマホを横に持っているときは、映像を回して立てた向きで検出する
+  prepare(source, crop, size, rot = 0) {
+    const rw = rot ? crop.h : crop.w;
+    const rh = rot ? crop.w : crop.h;
+    const r = Math.min(size / rw, size / rh);
+    const nw = Math.round(rw * r);
+    const nh = Math.round(rh * r);
     const dx = Math.round((size - nw) / 2 - 0.1);
     const dy = Math.round((size - nh) / 2 - 0.1);
     const cv = this.prepCanvas;
@@ -210,7 +213,15 @@ export class Detector {
     const ctx = this.prepCtx;
     ctx.fillStyle = 'rgb(114,114,114)';
     ctx.fillRect(0, 0, size, size);
-    ctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, dx, dy, nw, nh);
+    if (rot) {
+      ctx.save();
+      ctx.translate(dx + nw / 2, dy + nh / 2);
+      ctx.rotate(-rot * Math.PI / 180);
+      ctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, -crop.w * r / 2, -crop.h * r / 2, crop.w * r, crop.h * r);
+      ctx.restore();
+    } else {
+      ctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, dx, dy, nw, nh);
+    }
     const px = ctx.getImageData(0, 0, size, size).data;
     const area = size * size;
     // 検出は1つずつ順番に行うので、入力用のメモリは毎回作らずに使い回す
@@ -224,8 +235,8 @@ export class Detector {
     return { input, r, dx, dy };
   }
 
-  // source の crop 範囲を検出する。結果は crop の中の座標。
-  // opt: { conf, selected: Set, maskTest(nx, ny) → true なら捨てる }
+  // source の crop 範囲を検出する。結果は crop の中の座標（rot があるときは回したあとの座標）。
+  // opt: { conf, selected: Set, maskTest(nx, ny) → true なら捨てる, rot }
   detect(source, crop, size, opt) {
     const job = this.queue.then(() => this._detect(source, crop, size, opt));
     this.queue = job.catch(() => {});
@@ -235,7 +246,9 @@ export class Detector {
   async _detect(source, crop, size, opt) {
     const ort = window.ort;
     const t0 = performance.now();
-    const pre = this.prepare(source, crop, size);
+    const rot = opt.rot || 0;
+    const pre = this.prepare(source, crop, size, rot);
+    if (rot) crop = { x: 0, y: 0, w: crop.h, h: crop.w };   // ここから先は回したあとの大きさで考える
     const tensor = new ort.Tensor('float32', pre.input, [1, 3, size, size]);
 
     const cocoS = await this.session('yolo11n', size);
