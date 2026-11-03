@@ -133,6 +133,22 @@ svg { width: 24px; height: 24px; fill: currentColor; }
   background: var(--panel); padding: 10px; border-radius: 14px; border: 1px solid var(--line);
 }
 
+/* ---- 横向き：撮影ボタンを右端に縦に並べ、非検出エリアのボタンは左端へ ---- */
+@media (orientation: landscape) {
+  :root { --side: calc(var(--safe-right) + 100px); }
+  #bottombar {
+    top: 0; bottom: 0; left: auto; right: 0; width: var(--side);
+    padding: calc(var(--safe-top) + 14px) calc(var(--safe-right) + 14px) calc(var(--safe-bottom) + 14px) 14px;
+    flex-direction: column-reverse; justify-content: space-evenly;
+    background: linear-gradient(to left, rgba(0,0,0,.55), transparent);
+  }
+  #topbar { right: var(--side); }
+  #maskButtons { right: auto; left: calc(var(--safe-left) + 10px); }
+  #zoomLabel { left: calc(50% - var(--side) / 2); bottom: calc(var(--safe-bottom) + 14px); }
+  #recTime { left: calc(50% - var(--side) / 2); top: calc(var(--safe-top) + 12px); }
+  #importMenu { left: auto; right: calc(var(--side) + 6px); bottom: calc(var(--safe-bottom) + 14px); }
+}
+
 /* ---- 開始画面 ---- */
 #start {
   position: fixed; inset: 0; background: #0b0b0f;

@@ -50,7 +50,9 @@ export class LiveCamera {
     this.getSize = () => 320;
     this.onDetections = () => {};
     this.onError = () => {};
+    this.onOrientation = () => {};   // 映像が縦長⇔横長に変わったとき（'portrait' / 'landscape'）
     this.drawOverlayContent = () => {};
+    this.orient = null;
     this.render = this.render.bind(this);
     window.addEventListener('resize', () => this.layout());
   }
@@ -69,6 +71,7 @@ export class LiveCamera {
     this.zoom = 1;
     if (this.hwZoom) this.applyHwZoom();
     this.dets = [];
+    this.orient = null;
     this.running = true;
     requestAnimationFrame(this.render);
     this.detectLoop();
@@ -173,6 +176,13 @@ export class LiveCamera {
     requestAnimationFrame(this.render);
     const v = this.video;
     if (v.readyState < 2 || !v.videoWidth) return;
+    // スマホを回すと映像の縦横が入れ替わる
+    const orient = v.videoWidth >= v.videoHeight ? 'landscape' : 'portrait';
+    if (orient !== this.orient) {
+      this.orient = orient;
+      this.dets = [];
+      this.onOrientation(orient);
+    }
     if (!this.recording && (this.view.width !== v.videoWidth || this.view.height !== v.videoHeight)) {
       this.view.width = this.clean.width = v.videoWidth;
       this.view.height = this.clean.height = v.videoHeight;

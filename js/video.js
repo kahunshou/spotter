@@ -169,7 +169,7 @@ function renderTimeline(rows, perClass, nFrames, player) {
   return wrap;
 }
 
-export async function openVideoScreen(file, { detector, getOptions, mask, onClose }) {
+export async function openVideoScreen(file, { detector, getOptions, maskFor, onClose }) {
   const screen = $('#videoScreen');
   const src = el('video', { muted: true, playsinline: true, preload: 'auto' });
   src.muted = true;
@@ -242,8 +242,11 @@ export async function openVideoScreen(file, { detector, getOptions, mask, onClos
   const fpsSel = el('select', {},
     [[30, '30 コマ/秒'], [15, '15 コマ/秒（速い）']].map(([v, t]) =>
       el('option', { value: v, selected: settings.videoFps === v }, t)));
+  // 非検出エリアは動画の向き（縦長・横長）に合うほうを使う
+  const mask = maskFor(vw >= vh ? 'landscape' : 'portrait');
   const useMask = el('input', { type: 'checkbox' });
-  const maskRow = el('label', { class: 'row' }, el('span', { class: 'row-text' }, '非検出エリアを使う'), useMask);
+  const maskRow = el('label', { class: 'row' },
+    el('span', { class: 'row-text' }, '非検出エリアを使う', el('small', {}, vw >= vh ? '横向きで描いた範囲' : '縦向きで描いた範囲')), useMask);
   maskRow.hidden = mask.isEmpty();
   const estimate = el('p', { class: 'hint' });
   const updateEstimate = () => {

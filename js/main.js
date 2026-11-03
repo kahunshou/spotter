@@ -13,8 +13,8 @@ import { $, el, formatTime, keepAwake, showSheet, stamp, toast } from './ui.js';
 import { openVideoScreen } from './video.js';
 
 const detector = new Detector();
-const mask = new Mask();
-mask.load(settings.mask);
+const mask = new Mask();     // 今の向き（maskKey）の非検出エリア
+let maskKey = null;
 const cam = new LiveCamera(detector, {
   stage: $('#stage'), video: $('#video'), view: $('#view'), overlay: $('#overlay'),
 });
@@ -72,6 +72,26 @@ cam.onDetections = (dets, st) => {
   $('#status').textContent = `${settings.liveSize}・${st.fps.toFixed(1)} fps・${detector.backend}`;
 };
 cam.onError = (e) => toast(`検出でエラー：${e.message}`, 4000);
+
+// 非検出エリアは縦向き用と横向き用を別々に持ち、映像の向きが変わったら入れ替える
+function saveMask() {
+  if (!maskKey) return;
+  settings.masks[maskKey] = mask.serialize();
+  saveSettings();
+}
+cam.onOrientation = (key) => {
+  if (maskEditing) saveMask();   // 描いている途中で回したときも、それまでの分は残す
+  maskKey = key;
+  mask.load(settings.masks[key]);
+  applyVisibility();
+};
+// 読み込んだ動画に使う非検出エリア（動画の向きに合うほう）
+function maskFor(key) {
+  if (key === maskKey) return mask;
+  const m = new Mask();
+  m.load(settings.masks[key]);
+  return m;
+}
 cam.drawOverlayContent = (ctx, r) => {
   if (maskEditing || settings.maskOn) {
     mask.draw(ctx, r.x, r.y, r.w, r.h, maskEditing ? 'rgba(255,48,48,0.45)' : 'rgba(255,48,48,0.2)');
@@ -300,7 +320,7 @@ $('#videoInput').addEventListener('change', (e) => {
   e.target.value = '';
   if (!file) return;
   openImportScreen('動画の読み込み');
-  openVideoScreen(file, { detector, getOptions: importOptions, mask, onClose: resumeCamera });
+  openVideoScreen(file, { detector, getOptions: importOptions, maskFor, onClose: resumeCamera });
 });
 
 // ---- 非検出エリア ----
@@ -308,11 +328,11 @@ function setMaskEditing(on) {
   maskEditing = on;
   $('#maskBar').hidden = !on;
   $('#bottombar').hidden = on;
+  $('#zoomLabel').hidden = on;
   $('#overlay').classList.toggle('editing', on);
   if (!on) {
-    settings.mask = mask.serialize();
     if (!mask.isEmpty()) settings.maskOn = true;
-    saveSettings();
+    saveMask();
   }
   applyVisibility();
 }

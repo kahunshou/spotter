@@ -43,12 +43,13 @@ export class Mask {
   draw(ctx, x, y, w, h, fill) {
     ctx.save();
     ctx.fillStyle = fill;
-    const cw = w / GW;
-    const ch = h / GH;
+    // マスの境目を整数にそろえ、半透明の重なりで縞模様が出ないようにする
+    const xs = Array.from({ length: GW + 1 }, (_, i) => Math.round(x + i * w / GW));
+    const ys = Array.from({ length: GH + 1 }, (_, i) => Math.round(y + i * h / GH));
     for (let gy = 0; gy < GH; gy++) {
       for (let gx = 0; gx < GW; gx++) {
         if (this.bits[gy * GW + gx]) {
-          ctx.fillRect(x + gx * cw, y + gy * ch, Math.ceil(cw), Math.ceil(ch));
+          ctx.fillRect(xs[gx], ys[gy], xs[gx + 1] - xs[gx], ys[gy + 1] - ys[gy]);
         }
       }
     }

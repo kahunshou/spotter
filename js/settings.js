@@ -12,7 +12,7 @@ const DEFAULTS = {
   showCounts: true,
   showMaskButton: true,
   maskOn: false,
-  mask: '',
+  masks: { portrait: '', landscape: '' },   // 非検出エリア。映像が縦長か横長かで別々に持つ
   recordClean: false,
   backend: 'auto',       // auto / wasm / webgpu（auto は PC なら WebGPU、スマホなら WASM）
   facing: 'environment',
@@ -32,6 +32,12 @@ function load() {
   const s = { ...DEFAULTS, ...saved };
   if (!Array.isArray(s.selected)) s.selected = DEFAULTS.selected.slice();
   if (!['auto', 'wasm', 'webgpu'].includes(s.backend)) s.backend = 'auto';
+  if (!s.masks || typeof s.masks !== 'object') s.masks = { portrait: '', landscape: '' };
+  // 以前の版の非検出エリア（1つだけ）は、縦向き用として引き継ぐ
+  if (typeof s.mask === 'string') {
+    if (s.mask && !s.masks.portrait) s.masks.portrait = s.mask;
+    delete s.mask;
+  }
   return s;
 }
 
